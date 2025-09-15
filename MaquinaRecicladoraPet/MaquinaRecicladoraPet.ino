@@ -1,73 +1,77 @@
-// 🎯 Código final para controlar la velocidad del motor.
-// La estabilidad y suavidad se ajustan en el HARDWARE (VREF y Microstepping).
+// 🎯 ¡MÁQUINA RECICLADORA DE BOTELLAS!
+// Este código controla el motorcito que tira del plástico derretido
+// ¡Como una máquina de hacer fideos pero con plástico reciclado!
 
-// --- Pines del Motor ---
-const int dirPin = 2;
-const int stepPin = 3;
+// --- Los cables del Motor (como los pedales de una bici) ---
+const int dirPin = 2;     // Pin que dice "adelante o atrás"
+const int stepPin = 3;     // Pin que dice "da un pasito"
 
-// --- Pin del Potenciómetro ---
-const int potPin = A0;
+// --- La perilla de velocidad (como el acelerador) ---
+const int potPin = A0;     // Aquí conectamos la perilla giratoria
 
-// --- Pin del Botón de Inversión ---
-const int botonInversion = 4;  // 🔄 Botón para cambiar dirección
-bool direccionActual = HIGH;   // Variable para guardar la dirección
+// --- El botón mágico de cambio ---
+const int botonInversion = 4;  // 🔄 Botón para ir hacia atrás
+bool direccionActual = HIGH;   // Guardamos si vamos adelante o atrás
 
 void setup() {
-// Configurar los pines del motor como SALIDA
-pinMode(dirPin, OUTPUT);
-pinMode(stepPin, OUTPUT);
+// Le decimos al Arduino qué hace cada cable:
+// Estos dos cables le dan órdenes al motor
+pinMode(dirPin, OUTPUT);    // Cable de dirección: ¡Tú das órdenes!
+pinMode(stepPin, OUTPUT);    // Cable de pasos: ¡Tú también!
 
-// 🔘 Configurar el botón como ENTRADA con resistencia pull-up interna
-pinMode(botonInversion, INPUT_PULLUP);
+// 🔘 El botón es diferente, él nos da información a nosotros
+pinMode(botonInversion, INPUT_PULLUP);  // ¡Escuchamos al botón!
 
-// Dirección inicial del motor
+// Empezamos yendo hacia adelante
 digitalWrite(dirPin, direccionActual);
 }
 
 void loop() {
-// 🔄 VERIFICAR BOTÓN DE INVERSIÓN
-static bool botonAnterior = HIGH;  // Estado anterior del botón
-bool botonActual = digitalRead(botonInversion);
+// 🔄 ¿ALGUIEN APRETÓ EL BOTÓN DE CAMBIO?
+static bool botonAnterior = HIGH;  // ¿Cómo estaba el botón antes?
+bool botonActual = digitalRead(botonInversion);  // ¿Cómo está ahora?
 
-// Detectar cuando se PRESIONA el botón (flanco descendente)
+// Si el botón estaba suelto y ahora está apretado...
 if (botonAnterior == HIGH && botonActual == LOW) {
-  // Invertir la dirección
+  // ¡Cambiamos de dirección! Si íbamos adelante, ahora atrás
   direccionActual = !direccionActual;
   digitalWrite(dirPin, direccionActual);
-  
-  // Pequeña pausa para evitar rebotes
+
+  // Esperamos un poquito para que el botón se calme
   delay(50);
 }
-botonAnterior = botonActual;
+botonAnterior = botonActual;  // Recordamos para la próxima vez
 
-// 1. Leer el valor del potenciómetro varias veces y promediar
-//    Esto elimina el ruido y las lecturas erráticas
+// 1. LEEMOS LA PERILLA DE VELOCIDAD
+// La leemos 5 veces y sacamos el promedio (como cuando
+// preguntas 5 veces qué pizza quieren y eliges la más votada)
 int suma = 0;
 for(int i = 0; i < 5; i++) {
-  suma += analogRead(potPin);
-  delayMicroseconds(100);
+  suma += analogRead(potPin);  // Leemos la perilla
+  delayMicroseconds(100);       // Mini-pausa entre lecturas
 }
-int valorPot = suma / 5;
+int valorPot = suma / 5;  // Dividimos por 5 para el promedio
 
-// 2. Convertir el valor a un rango de delay 
-//    TRUCO: Evitamos la zona problemática del medio (4000-6000)
-int delayMotor;
+// 2. CONVERTIMOS LA PERILLA EN VELOCIDAD
+// ¡TRUCO GENIAL! El motor tiembla con velocidades medias,
+// así que las saltamos (como evitar un bache en la calle)
+int delayMotor;  // Tiempo entre pasos (más tiempo = más lento)
 if (valorPot < 400) {
-  // Zona lenta: 10000 a 6500
+  // MODO TORTUGA 🐢: Súper lento para empezar
   delayMotor = map(valorPot, 0, 400, 10000, 6500);
 } else if (valorPot > 600) {
-  // Zona rápida: 4000 a 500
+  // MODO LIEBRE 🐰: Rápido cuando giramos mucho la perilla
   delayMotor = map(valorPot, 600, 1023, 4000, 500);
 } else {
-  // 🎯 ZONA MEDIA: Saltamos la resonancia!
-  // Usamos una velocidad fija que no cabecee
-  delayMotor = 5000;
+  // ZONA PROHIBIDA: Aquí el motor tiembla, ¡la saltamos!
+  delayMotor = 5000;  // Velocidad fija sin temblores
 }
 
 
-// 3. Mover el motor con pulso optimizado
-digitalWrite(stepPin, HIGH);
-delayMicroseconds(25);  // Pulso corto y constante
-digitalWrite(stepPin, LOW);
-delayMicroseconds(delayMotor - 25);  // Resto del delay
+// 3. ¡HACEMOS QUE EL MOTOR DÉ UN PASITO!
+// Es como darle un toquecito al motor para que avance
+digitalWrite(stepPin, HIGH);         // ¡Despierta motor!
+delayMicroseconds(25);                // Toque cortito
+digitalWrite(stepPin, LOW);          // Ya puedes descansar
+delayMicroseconds(delayMotor - 25);  // Esperamos antes del próximo paso
 }
