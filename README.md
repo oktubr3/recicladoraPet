@@ -8,7 +8,7 @@ Este proyecto consiste en una máquina innovadora que transforma botellas de pl�
 
 ## 🎯 Nuestra Misión
 
-Crear una solución accesible y eficiente para el reciclaje de plástico PET, permitiendo a makers, escuelas y pequeños emprendimientos convertir residuos plásticos en material útil para manufactura aditiva.
+Crear una solución accesible y eficiente para el reciclaje de plástico PET, permitiendo convertir residuos plásticos en material útil para manufactura aditiva.
 
 ## 🏗️ Arquitectura del Sistema
 
