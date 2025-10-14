@@ -2,6 +2,14 @@
 // Este código controla el motorcito que tira del plástico derretido
 // ¡Como una máquina de hacer fideos pero con plástico reciclado!
 
+// --- LIBRERÍAS PARA EL DISPLAY ---
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// --- CONFIGURACIÓN DEL DISPLAY LCD I2C ---
+// (Si no funciona con 0x27, prueba 0x3F)
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
 // --- Los cables del Motor (como los pedales de una bici) ---
 const int dirPin = 2;     // Pin que dice "adelante o atrás"
 const int stepPin = 3;     // Pin que dice "da un pasito"
@@ -14,6 +22,16 @@ const int botonInversion = 4;  // 🔄 Botón para ir hacia atrás
 bool direccionActual = HIGH;   // Guardamos si vamos adelante o atrás
 
 void setup() {
+// --- INICIAMOS EL DISPLAY ---
+lcd.init();
+lcd.backlight();
+lcd.setCursor(0, 0);
+lcd.print("Recicladora PET");
+lcd.setCursor(0, 1);
+lcd.print("Iniciando...");
+delay(1500);
+lcd.clear();
+
 // Le decimos al Arduino qué hace cada cable:
 // Estos dos cables le dan órdenes al motor
 pinMode(dirPin, OUTPUT);    // Cable de dirección: ¡Tú das órdenes!
@@ -74,4 +92,28 @@ digitalWrite(stepPin, HIGH);         // ¡Despierta motor!
 delayMicroseconds(25);                // Toque cortito
 digitalWrite(stepPin, LOW);          // Ya puedes descansar
 delayMicroseconds(delayMotor - 25);  // Esperamos antes del próximo paso
+
+// 4. ACTUALIZAR DISPLAY (solo cada 2000 pasos para no afectar el motor)
+static int contadorPasos = 0;
+contadorPasos++;
+
+if (contadorPasos >= 2000) {
+  contadorPasos = 0;
+
+  // Línea 1: Velocidad en porcentaje
+  lcd.setCursor(0, 0);
+  lcd.print("Vel:");
+  int velocidadPercent = map(delayMotor, 10000, 500, 0, 100);
+  lcd.print(velocidadPercent);
+  lcd.print("%   ");  // Espacios para borrar números viejos
+
+  // Línea 2: Dirección
+  lcd.setCursor(0, 1);
+  lcd.print("Dir:");
+  if (direccionActual == HIGH) {
+    lcd.print("Adelante  ");
+  } else {
+    lcd.print("Atras     ");
+  }
+}
 }
