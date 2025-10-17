@@ -23,6 +23,17 @@ const float R_FIJA = 4700.0;     // Resistencia fija de 4.7k ohmios
 const float R_TERMISTOR_25C = 100000.0;  // Resistencia del termistor a 25°C (100k)
 const float BETA = 3950.0;       // Coeficiente Beta del termistor (típico: 3950)
 
+// --- El calefactor con MOSFET 🔥 ---
+const int mosfetPin = 9;         // Pin del MOSFET para el calefactor
+float tempObjetivo = 50.0;       // Temperatura objetivo en °C (se puede cambiar con botones)
+const float HISTERESIS = 2.0;    // Histéresis para evitar encendido/apagado constante
+bool controlCalefactorActivo = false;  // ¿Está el control automático activado?
+
+// --- Los botones del calefactor 🔘 ---
+const int botonOnOff = 5;        // D5: Botón para prender/apagar el control del calefactor
+const int botonBajar = 6;        // D6: Botón para bajar la temperatura objetivo
+const int botonSubir = 7;        // D7: Botón para subir la temperatura objetivo
+
 // --- El botón mágico de cambio ---
 const int botonInversion = 4;  // 🔄 Botón para ir hacia atrás
 bool direccionActual = HIGH;   // Guardamos si vamos adelante o atrás
@@ -43,28 +54,84 @@ lcd.clear();
 pinMode(dirPin, OUTPUT);    // Cable de dirección: ¡Tú das órdenes!
 pinMode(stepPin, OUTPUT);    // Cable de pasos: ¡Tú también!
 
-// 🔘 El botón es diferente, él nos da información a nosotros
-pinMode(botonInversion, INPUT_PULLUP);  // ¡Escuchamos al botón!
+// 🔥 El MOSFET del calefactor
+pinMode(mosfetPin, OUTPUT);  // Pin del calefactor
+digitalWrite(mosfetPin, LOW);  // Apagado al inicio
+
+// 🔘 Los botones - todos escuchan lo que hacemos
+pinMode(botonInversion, INPUT_PULLUP);  // Botón de cambio de dirección
+pinMode(botonOnOff, INPUT_PULLUP);      // Botón ON/OFF del calefactor
+pinMode(botonBajar, INPUT_PULLUP);      // Botón para bajar temperatura
+pinMode(botonSubir, INPUT_PULLUP);      // Botón para subir temperatura
 
 // Empezamos yendo hacia adelante
 digitalWrite(dirPin, direccionActual);
 }
 
 void loop() {
-// 🔄 ¿ALGUIEN APRETÓ EL BOTÓN DE CAMBIO?
-static bool botonAnterior = HIGH;  // ¿Cómo estaba el botón antes?
-bool botonActual = digitalRead(botonInversion);  // ¿Cómo está ahora?
+// 🔄 ¿ALGUIEN APRETÓ EL BOTÓN DE CAMBIO DE DIRECCIÓN?
+static bool botonInversionAnterior = HIGH;  // ¿Cómo estaba el botón antes?
+bool botonInversionActual = digitalRead(botonInversion);  // ¿Cómo está ahora?
 
 // Si el botón estaba suelto y ahora está apretado...
-if (botonAnterior == HIGH && botonActual == LOW) {
+if (botonInversionAnterior == HIGH && botonInversionActual == LOW) {
   // ¡Cambiamos de dirección! Si íbamos adelante, ahora atrás
   direccionActual = !direccionActual;
   digitalWrite(dirPin, direccionActual);
-
-  // Esperamos un poquito para que el botón se calme
-  delay(50);
+  delay(50);  // Esperamos un poquito para que el botón se calme
 }
-botonAnterior = botonActual;  // Recordamos para la próxima vez
+botonInversionAnterior = botonInversionActual;  // Recordamos para la próxima vez
+
+// 🔥 ¿ALGUIEN APRETÓ EL BOTÓN ON/OFF DEL CALEFACTOR?
+static bool botonOnOffAnterior = HIGH;
+bool botonOnOffActual = digitalRead(botonOnOff);
+
+if (botonOnOffAnterior == HIGH && botonOnOffActual == LOW) {
+  // ¡Cambiamos el estado! Si estaba prendido, ahora apagado (y viceversa)
+  controlCalefactorActivo = !controlCalefactorActivo;
+
+  // Si apagamos el control, también apagamos el calefactor
+  if (!controlCalefactorActivo) {
+    digitalWrite(mosfetPin, LOW);
+  }
+
+  delay(50);  // Anti-rebote
+}
+botonOnOffAnterior = botonOnOffActual;
+
+// ⬇️ ¿ALGUIEN APRETÓ EL BOTÓN PARA BAJAR TEMPERATURA?
+static bool botonBajarAnterior = HIGH;
+bool botonBajarActual = digitalRead(botonBajar);
+
+if (botonBajarAnterior == HIGH && botonBajarActual == LOW) {
+  // Bajamos la temperatura de a 5 grados
+  tempObjetivo -= 5.0;
+
+  // No dejamos que baje de 0°C (el agua se congela!)
+  if (tempObjetivo < 0) {
+    tempObjetivo = 0;
+  }
+
+  delay(50);  // Anti-rebote
+}
+botonBajarAnterior = botonBajarActual;
+
+// ⬆️ ¿ALGUIEN APRETÓ EL BOTÓN PARA SUBIR TEMPERATURA?
+static bool botonSubirAnterior = HIGH;
+bool botonSubirActual = digitalRead(botonSubir);
+
+if (botonSubirAnterior == HIGH && botonSubirActual == LOW) {
+  // Subimos la temperatura de a 5 grados
+  tempObjetivo += 5.0;
+
+  // No dejamos que suba de 270°C (¡es muy peligroso!)
+  if (tempObjetivo > 270) {
+    tempObjetivo = 270;
+  }
+
+  delay(50);  // Anti-rebote
+}
+botonSubirAnterior = botonSubirActual;
 
 // 1. LEEMOS LA PERILLA DE VELOCIDAD
 // La leemos 5 veces y sacamos el promedio (como cuando
@@ -126,6 +193,27 @@ if (contadorPasos >= 2000) {
   steinhart = 1.0 / steinhart;
   temperaturaActual = steinhart - 273.15;  // Convertir a Celsius
 
+  // 🔥 CONTROL DEL CALEFACTOR (solo si está activado)
+  static bool calefactorEncendido = false;
+
+  // Solo controlamos la temperatura si el botón ON/OFF está activado
+  if (controlCalefactorActivo) {
+    if (temperaturaActual < (tempObjetivo - HISTERESIS)) {
+      // Si está muy por debajo, encender
+      digitalWrite(mosfetPin, HIGH);
+      calefactorEncendido = true;
+    } else if (temperaturaActual > tempObjetivo) {
+      // Si alcanzó o superó el objetivo, apagar
+      digitalWrite(mosfetPin, LOW);
+      calefactorEncendido = false;
+    }
+    // Entre (tempObjetivo - HISTERESIS) y tempObjetivo mantiene el estado anterior
+  } else {
+    // Si el control está desactivado, apagar el calefactor
+    digitalWrite(mosfetPin, LOW);
+    calefactorEncendido = false;
+  }
+
   // Detectar si cambió la velocidad (diferencia mayor a 10)
   if (abs(valorPot - valorPotAnterior) > 10) {
     tiempoUltimoCambio = millis();  // Marcar el tiempo del cambio
@@ -151,12 +239,24 @@ if (contadorPasos >= 2000) {
   } else {
     // MODO NORMAL: Mostrar temperaturas
     lcd.setCursor(0, 0);
-    lcd.print("Temp: ");
+    lcd.print("T:");
     lcd.print(temperaturaActual, 1);
-    lcd.print("C   ");
+    lcd.print("C ");
+
+    // Mostramos el estado: ON si está activo y calentando, OFF si desactivado
+    if (controlCalefactorActivo) {
+      lcd.print(calefactorEncendido ? "HEAT" : "WAIT");  // HEAT=calentando, WAIT=esperando
+    } else {
+      lcd.print("OFF ");  // Control desactivado
+    }
 
     lcd.setCursor(0, 1);
-    lcd.print("Deseada: --C    ");  // Por ahora sin temperatura deseada
+    lcd.print("Obj:");
+    lcd.print(tempObjetivo, 0);
+    lcd.print("C ");
+
+    // Mostramos flechitas para recordar cómo cambiar
+    lcd.print("D6- D7+");
   }
 }
 }
