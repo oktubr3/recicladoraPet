@@ -17,6 +17,12 @@ const int stepPin = 3;     // Pin que dice "da un pasito"
 // --- La perilla de velocidad (como el acelerador) ---
 const int potPin = A0;     // Aquí conectamos la perilla giratoria
 
+// --- El termistor para medir temperatura 🌡️ ---
+const int termistorPin = A1;     // Pin del termistor
+const float R_FIJA = 4700.0;     // Resistencia fija de 4.7k ohmios
+const float R_TERMISTOR_25C = 100000.0;  // Resistencia del termistor a 25°C (100k)
+const float BETA = 3950.0;       // Coeficiente Beta del termistor (típico: 3950)
+
 // --- El botón mágico de cambio ---
 const int botonInversion = 4;  // 🔄 Botón para ir hacia atrás
 bool direccionActual = HIGH;   // Guardamos si vamos adelante o atrás
@@ -93,27 +99,64 @@ delayMicroseconds(25);                // Toque cortito
 digitalWrite(stepPin, LOW);          // Ya puedes descansar
 delayMicroseconds(delayMotor - 25);  // Esperamos antes del próximo paso
 
-// 4. ACTUALIZAR DISPLAY (solo cada 2000 pasos para no afectar el motor)
+// 4. CALCULAR TEMPERATURA Y ACTUALIZAR DISPLAY
+static float temperaturaActual = 0.0;
+static int valorPotAnterior = 0;
+static unsigned long tiempoUltimoCambio = 0;
 static int contadorPasos = 0;
 contadorPasos++;
 
 if (contadorPasos >= 2000) {
   contadorPasos = 0;
 
-  // Línea 1: Velocidad en porcentaje
-  lcd.setCursor(0, 0);
-  lcd.print("Vel:");
-  int velocidadPercent = map(delayMotor, 10000, 500, 0, 100);
-  lcd.print(velocidadPercent);
-  lcd.print("%   ");  // Espacios para borrar números viejos
+  // Leemos el termistor y calculamos temperatura
+  int lecturaADC = analogRead(termistorPin);
 
-  // Línea 2: Dirección
-  lcd.setCursor(0, 1);
-  lcd.print("Dir:");
-  if (direccionActual == HIGH) {
-    lcd.print("Adelante  ");
+  // Calculamos la resistencia del termistor
+  // Conexión: 5V -> R_fija -> A1 -> Termistor -> GND
+  // Fórmula: R_termistor = R_fija * ADC / (1023 - ADC)
+  float resistenciaTermistor = R_FIJA * lecturaADC / (1023.0 - lecturaADC);
+
+  // Calculamos temperatura usando ecuación de Steinhart-Hart simplificada
+  float steinhart;
+  steinhart = resistenciaTermistor / R_TERMISTOR_25C;
+  steinhart = log(steinhart);
+  steinhart /= BETA;
+  steinhart += 1.0 / 298.15;
+  steinhart = 1.0 / steinhart;
+  temperaturaActual = steinhart - 273.15;  // Convertir a Celsius
+
+  // Detectar si cambió la velocidad (diferencia mayor a 10)
+  if (abs(valorPot - valorPotAnterior) > 10) {
+    tiempoUltimoCambio = millis();  // Marcar el tiempo del cambio
+    valorPotAnterior = valorPot;
+  }
+
+  // Si pasaron menos de 3 segundos desde el último cambio, mostrar velocidad
+  if (millis() - tiempoUltimoCambio < 3000) {
+    // MODO TEMPORAL: Mostrar velocidad y dirección
+    lcd.setCursor(0, 0);
+    lcd.print("Velocidad: ");
+    int velocidadPercent = map(delayMotor, 10000, 500, 0, 100);
+    lcd.print(velocidadPercent);
+    lcd.print("%   ");
+
+    lcd.setCursor(0, 1);
+    lcd.print("Direccion: ");
+    if (direccionActual == HIGH) {
+      lcd.print(">   ");  // Adelante
+    } else {
+      lcd.print("<   ");  // Atrás
+    }
   } else {
-    lcd.print("Atras     ");
+    // MODO NORMAL: Mostrar temperaturas
+    lcd.setCursor(0, 0);
+    lcd.print("Temp: ");
+    lcd.print(temperaturaActual, 1);
+    lcd.print("C   ");
+
+    lcd.setCursor(0, 1);
+    lcd.print("Deseada: --C    ");  // Por ahora sin temperatura deseada
   }
 }
 }
