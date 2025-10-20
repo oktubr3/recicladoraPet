@@ -171,22 +171,40 @@ contadorPasos++;
 if (contadorPasos >= 500) {
   contadorPasos = 0;
 
-  // Leemos el termistor y calculamos temperatura
-  int lecturaADC = analogRead(termistorPin);
+  // Leemos el termistor VARIAS VECES y promediamos para suavizar
+  float sumaTemperaturas = 0;
+  for (int i = 0; i < 10; i++) {
+    int lecturaADC = analogRead(termistorPin);
 
-  // Calculamos la resistencia del termistor
-  // Conexión: 5V -> R_fija -> A1 -> Termistor -> GND
-  // Fórmula: R_termistor = R_fija * ADC / (1023 - ADC)
-  float resistenciaTermistor = R_FIJA * lecturaADC / (1023.0 - lecturaADC);
+    // Calculamos la resistencia del termistor
+    // Conexión: 5V -> R_fija -> A1 -> Termistor -> GND
+    // Fórmula: R_termistor = R_fija * ADC / (1023 - ADC)
+    float resistenciaTermistor = R_FIJA * lecturaADC / (1023.0 - lecturaADC);
 
-  // Calculamos temperatura usando ecuación de Steinhart-Hart simplificada
-  float steinhart;
-  steinhart = resistenciaTermistor / R_TERMISTOR_25C;
-  steinhart = log(steinhart);
-  steinhart /= BETA;
-  steinhart += 1.0 / 298.15;
-  steinhart = 1.0 / steinhart;
-  temperaturaActual = steinhart - 273.15;  // Convertir a Celsius
+    // Calculamos temperatura usando ecuación de Steinhart-Hart simplificada
+    float steinhart;
+    steinhart = resistenciaTermistor / R_TERMISTOR_25C;
+    steinhart = log(steinhart);
+    steinhart /= BETA;
+    steinhart += 1.0 / 298.15;
+    steinhart = 1.0 / steinhart;
+    float tempLectura = steinhart - 273.15;  // Convertir a Celsius
+
+    sumaTemperaturas += tempLectura;
+    delayMicroseconds(100);  // Pequeña pausa entre lecturas
+  }
+
+  // Promediamos las 10 lecturas para suavizar
+  float tempInstantanea = sumaTemperaturas / 10.0;
+
+  // Filtro adicional: promedio con la lectura anterior (suavizado exponencial simple)
+  if (temperaturaActual == 0.0) {
+    // Primera lectura
+    temperaturaActual = tempInstantanea;
+  } else {
+    // 80% de la anterior + 20% de la nueva = cambio gradual
+    temperaturaActual = (temperaturaActual * 0.8) + (tempInstantanea * 0.2);
+  }
 
   // 🔥 CONTROL DEL CALEFACTOR (solo si está activado)
   static bool calefactorEncendido = false;
