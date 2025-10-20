@@ -17,6 +17,10 @@ const int stepPin = 3;     // Pin que dice "da un pasito"
 // --- La perilla de velocidad (como el acelerador) ---
 const int potPin = A0;     // Aquí conectamos la perilla giratoria
 
+// --- Variables para control del motor por interrupción ---
+volatile unsigned int motorDelayMicros = 5000;  // Delay entre pasos (volatile porque se usa en interrupción)
+volatile bool motorHabilitado = true;  // Si el motor está habilitado
+
 // --- El termistor para medir temperatura 🌡️ ---
 const int termistorPin = A1;     // Pin del termistor
 const float R_FIJA = 4700.0;     // Resistencia fija de 4.7k ohmios
@@ -24,11 +28,18 @@ const float R_TERMISTOR_25C = 100000.0;  // Resistencia del termistor a 25°C (1
 const float BETA = 3950.0;       // Coeficiente Beta del termistor (típico: 3950)
 
 // --- El calefactor con MOSFET 🔥 ---
-const int mosfetPin = 9;         // Pin del MOSFET para el calefactor
-float tempObjetivo = 50.0;       // Temperatura objetivo en °C (se puede cambiar con botones)
-const float ANTICIPACION = 10.0; // Apagar 10°C antes para evitar sobrepaso
-const float HISTERESIS = 5.0;    // Diferencia para volver a encender
+const int mosfetPin = 9;         // Pin del MOSFET para el calefactor (PWM)
+float tempObjetivo = 150.0;      // Temperatura objetivo en °C (150 por defecto para PET)
 bool controlCalefactorActivo = false;  // ¿Está el control automático activado?
+
+// --- Control PID (como las Prusa) 🎯 ---
+// El PID ajusta la potencia del calefactor de forma inteligente
+// para llegar al objetivo sin pasarse
+float Kp = 10.0;    // Proporcional: qué tan fuerte reacciona al error
+float Ki = 0.1;     // Integral: corrige errores acumulados
+float Kd = 50.0;    // Derivativo: anticipa cambios
+float errorAnterior = 0.0;
+float errorAcumulado = 0.0;
 
 // --- Los botones del calefactor 🔘 ---
 const int botonOnOff = 5;        // D5: Botón para prender/apagar el control del calefactor
@@ -38,6 +49,24 @@ const int botonSubir = 7;        // D7: Botón para subir la temperatura objetiv
 // --- El botón mágico de cambio ---
 const int botonInversion = 4;  // 🔄 Botón para ir hacia atrás
 bool direccionActual = HIGH;   // Guardamos si vamos adelante o atrás
+
+// ⚡ INTERRUPCIÓN DEL TIMER1 - Controla el motor sin bloqueos
+// Esta función se ejecuta automáticamente a intervalos regulares
+// y genera pulsos para el motor paso a paso
+volatile bool pulsoAlto = false;
+
+ISR(TIMER1_COMPA_vect) {
+  if (motorHabilitado) {
+    // Alternamos el pin del motor (generamos pulsos automáticamente)
+    if (pulsoAlto) {
+      digitalWrite(stepPin, LOW);
+      pulsoAlto = false;
+    } else {
+      digitalWrite(stepPin, HIGH);
+      pulsoAlto = true;
+    }
+  }
+}
 
 void setup() {
 // --- INICIAMOS EL DISPLAY ---
@@ -67,9 +96,30 @@ pinMode(botonSubir, INPUT_PULLUP);      // Botón para subir temperatura
 
 // Empezamos yendo hacia adelante
 digitalWrite(dirPin, direccionActual);
+
+// --- CONFIGURACIÓN DEL TIMER1 PARA EL MOTOR ---
+// Timer1 generará interrupciones para mover el motor sin bloqueos
+noInterrupts();  // Desactivamos interrupciones mientras configuramos
+TCCR1A = 0;  // Modo normal del timer
+TCCR1B = 0;
+TCNT1 = 0;   // Contador en 0
+
+// Configuramos para modo CTC (Clear Timer on Compare Match)
+TCCR1B |= (1 << WGM12);
+// Prescaler de 8 (cada tick = 0.5 microsegundos a 16MHz)
+TCCR1B |= (1 << CS11);
+// Valor inicial del comparador (ajustable según velocidad)
+OCR1A = 10000;  // Genera interrupción cada 5ms aproximadamente
+// Habilitamos la interrupción por comparación
+TIMSK1 |= (1 << OCIE1A);
+interrupts();  // Reactivamos interrupciones
 }
 
+
 void loop() {
+// Variable para controlar cuándo mostrar pantalla de velocidad/dirección
+static unsigned long tiempoUltimoCambioMotor = 0;
+
 // LECTURA DE BOTONES (solo cada cierto tiempo para no afectar el motor)
 static unsigned long tiempoUltimaLecturaBotones = 0;
 static bool botonInversionAnterior = HIGH;
@@ -86,6 +136,7 @@ if (millis() - tiempoUltimaLecturaBotones > 50) {
   if (botonInversionAnterior == HIGH && botonInversionActual == LOW) {
     direccionActual = !direccionActual;
     digitalWrite(dirPin, direccionActual);
+    tiempoUltimoCambioMotor = millis();  // Mostrar pantalla de dirección
   }
   botonInversionAnterior = botonInversionActual;
 
@@ -120,56 +171,58 @@ if (millis() - tiempoUltimaLecturaBotones > 50) {
   botonSubirAnterior = botonSubirActual;
 }
 
-// 1. LEEMOS LA PERILLA DE VELOCIDAD
-// La leemos 5 veces y sacamos el promedio (como cuando
-// preguntas 5 veces qué pizza quieren y eliges la más votada)
-int suma = 0;
-for(int i = 0; i < 5; i++) {
-  suma += analogRead(potPin);  // Leemos la perilla
-  delayMicroseconds(100);       // Mini-pausa entre lecturas
+// 1. LEEMOS LA PERILLA DE VELOCIDAD Y ACTUALIZAMOS EL TIMER
+static unsigned long tiempoUltimaLecturaPot = 0;
+static int valorPot = 512;  // Valor medio por defecto
+static int delayMotor = 5000;
+static bool motorApagado = false;
+
+// Leer potenciómetro solo cada 50ms (no necesitamos leerlo más seguido)
+if (millis() - tiempoUltimaLecturaPot > 50) {
+  tiempoUltimaLecturaPot = millis();
+
+  // Leemos la perilla 5 veces y promediamos
+  int suma = 0;
+  for(int i = 0; i < 5; i++) {
+    suma += analogRead(potPin);
+    delayMicroseconds(100);
+  }
+  valorPot = suma / 5;
+
+  // Convertimos la perilla en velocidad
+  if (valorPot < 20) {
+    // Menos de 2%: motor apagado
+    motorApagado = true;
+    motorHabilitado = false;
+  } else {
+    motorApagado = false;
+    motorHabilitado = true;
+
+    // Calculamos el delay según la perilla
+    if (valorPot < 400) {
+      delayMotor = map(valorPot, 20, 400, 10000, 6500);
+    } else if (valorPot > 600) {
+      delayMotor = map(valorPot, 600, 1023, 4000, 500);
+    } else {
+      delayMotor = 5000;
+    }
+
+    // Actualizamos la frecuencia del Timer1
+    // OCR1A = (delay_microsegundos * 2) porque prescaler es 8 y cada tick es 0.5us
+    noInterrupts();
+    OCR1A = delayMotor * 2;
+    interrupts();
+  }
 }
-int valorPot = suma / 5;  // Dividimos por 5 para el promedio
 
-// 2. CONVERTIMOS LA PERILLA EN VELOCIDAD
-// ¡TRUCO GENIAL! El motor tiembla con velocidades medias,
-// así que las saltamos (como evitar un bache en la calle)
-int delayMotor;  // Tiempo entre pasos (más tiempo = más lento)
-bool motorApagado = false;  // Para saber si apagamos el motor
-
-// Si la perilla está muy baja (menos de 2%), apagar el motor
-if (valorPot < 20) {  // 20 de 1023 es aproximadamente 2%
-  motorApagado = true;
-} else if (valorPot < 400) {
-  // MODO TORTUGA 🐢: Súper lento para empezar
-  delayMotor = map(valorPot, 20, 400, 10000, 6500);
-} else if (valorPot > 600) {
-  // MODO LIEBRE 🐰: Rápido cuando giramos mucho la perilla
-  delayMotor = map(valorPot, 600, 1023, 4000, 500);
-} else {
-  // ZONA PROHIBIDA: Aquí el motor tiembla, ¡la saltamos!
-  delayMotor = 5000;  // Velocidad fija sin temblores
-}
-
-
-// 3. ¡HACEMOS QUE EL MOTOR DÉ UN PASITO! (solo si no está apagado)
-if (!motorApagado) {
-  // Es como darle un toquecito al motor para que avance
-  digitalWrite(stepPin, HIGH);         // ¡Despierta motor!
-  delayMicroseconds(25);                // Toque cortito
-  digitalWrite(stepPin, LOW);          // Ya puedes descansar
-  delayMicroseconds(delayMotor - 25);  // Esperamos antes del próximo paso
-}
-
-// 4. CALCULAR TEMPERATURA Y ACTUALIZAR DISPLAY
+// 2. CALCULAR TEMPERATURA Y ACTUALIZAR DISPLAY
 static float temperaturaActual = 0.0;
 static int valorPotAnterior = 0;
-static unsigned long tiempoUltimoCambio = 0;
-static int contadorPasos = 0;
-contadorPasos++;
+static unsigned long tiempoUltimaActualizacionDisplay = 0;
 
-// Actualizar cada 500 pasos (más rápido que antes)
-if (contadorPasos >= 500) {
-  contadorPasos = 0;
+// Actualizar display cada 200ms (suficientemente rápido pero sin bloquear)
+if (millis() - tiempoUltimaActualizacionDisplay > 200) {
+  tiempoUltimaActualizacionDisplay = millis();
 
   // Leemos el termistor VARIAS VECES y promediamos para suavizar
   float sumaTemperaturas = 0;
@@ -206,37 +259,59 @@ if (contadorPasos >= 500) {
     temperaturaActual = (temperaturaActual * 0.8) + (tempInstantanea * 0.2);
   }
 
-  // 🔥 CONTROL DEL CALEFACTOR (solo si está activado)
+  // 🔥 CONTROL PID DEL CALEFACTOR (como las impresoras Prusa)
+  static int potenciaPWM = 0;
   static bool calefactorEncendido = false;
 
-  // Solo controlamos la temperatura si el botón ON/OFF está activado
   if (controlCalefactorActivo) {
-    // Apagar ANTICIPACION grados antes del objetivo para evitar sobrepaso
-    if (temperaturaActual >= (tempObjetivo - ANTICIPACION) && calefactorEncendido) {
-      // Estamos cerca del objetivo, apagar
-      digitalWrite(mosfetPin, LOW);
-      calefactorEncendido = false;
-    }
-    // Encender si está muy por debajo (objetivo - anticipación - histéresis)
-    else if (temperaturaActual < (tempObjetivo - ANTICIPACION - HISTERESIS)) {
-      // Está frío, encender
-      digitalWrite(mosfetPin, HIGH);
-      calefactorEncendido = true;
-    }
+    // Calculamos el ERROR: cuánto falta para llegar al objetivo
+    float error = tempObjetivo - temperaturaActual;
+
+    // P: Proporcional - mientras más lejos, más potencia
+    float P = Kp * error;
+
+    // I: Integral - acumulamos el error en el tiempo
+    errorAcumulado += error;
+    // Limitamos para evitar que se vaya al infinito
+    if (errorAcumulado > 1000) errorAcumulado = 1000;
+    if (errorAcumulado < -1000) errorAcumulado = -1000;
+    float I = Ki * errorAcumulado;
+
+    // D: Derivativo - qué tan rápido cambia el error (anticipa)
+    float D = Kd * (error - errorAnterior);
+    errorAnterior = error;
+
+    // Sumamos los tres componentes del PID
+    float salidaPID = P + I + D;
+
+    // Convertimos a PWM (0-255) y limitamos
+    potenciaPWM = (int)salidaPID;
+    if (potenciaPWM > 255) potenciaPWM = 255;
+    if (potenciaPWM < 0) potenciaPWM = 0;
+
+    // Aplicamos la potencia calculada al MOSFET (PWM)
+    analogWrite(mosfetPin, potenciaPWM);
+
+    // Consideramos "encendido" si está dando más del 10% de potencia
+    calefactorEncendido = (potenciaPWM > 25);
+
   } else {
-    // Si el control está desactivado, apagar el calefactor
-    digitalWrite(mosfetPin, LOW);
+    // Si el control está desactivado, apagar completamente
+    analogWrite(mosfetPin, 0);
+    potenciaPWM = 0;
     calefactorEncendido = false;
+    errorAcumulado = 0;  // Reseteamos el acumulador
+    errorAnterior = 0;
   }
 
   // Detectar si cambió la velocidad (diferencia mayor a 10)
   if (abs(valorPot - valorPotAnterior) > 10) {
-    tiempoUltimoCambio = millis();  // Marcar el tiempo del cambio
+    tiempoUltimoCambioMotor = millis();  // Marcar el tiempo del cambio
     valorPotAnterior = valorPot;
   }
 
   // Si pasaron menos de 3 segundos desde el último cambio, mostrar velocidad
-  if (millis() - tiempoUltimoCambio < 3000) {
+  if (millis() - tiempoUltimoCambioMotor < 3000) {
     // MODO TEMPORAL: Mostrar velocidad y dirección
     lcd.setCursor(0, 0);
     lcd.print("Velocidad: ");
