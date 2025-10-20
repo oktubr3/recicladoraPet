@@ -167,7 +167,8 @@ static unsigned long tiempoUltimoCambio = 0;
 static int contadorPasos = 0;
 contadorPasos++;
 
-if (contadorPasos >= 2000) {
+// Actualizar cada 500 pasos (más rápido que antes)
+if (contadorPasos >= 500) {
   contadorPasos = 0;
 
   // Leemos el termistor y calculamos temperatura
@@ -244,9 +245,9 @@ if (contadorPasos >= 2000) {
     lcd.setCursor(0, 0);
     lcd.print("T:");
     lcd.print(temperaturaActual, 1);
-    lcd.print("C ");
+    lcd.print("C   ");  // 2 espacios extra antes del estado
 
-    // Mostrar estado [ON] / [OFF]
+    // Mostrar estado [ON] / [OFF] (movido 2 espacios a la derecha)
     if (controlCalefactorActivo) {
       if (calefactorEncendido) {
         lcd.print("[ON] ");
