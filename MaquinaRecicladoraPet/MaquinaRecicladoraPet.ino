@@ -28,7 +28,7 @@ const float R_TERMISTOR_25C = 100000.0;  // Resistencia del termistor a 25°C (1
 const float BETA = 3950.0;       // Coeficiente Beta del termistor (típico: 3950)
 
 // --- El calefactor con MOSFET 🔥 ---
-const int mosfetPin = 9;         // Pin del MOSFET para el calefactor (PWM)
+const int mosfetPin = 11;        // Pin del MOSFET para el calefactor (PWM - usa Timer2, no interfiere con motor)
 float tempObjetivo = 150.0;      // Temperatura objetivo en °C (150 por defecto para PET)
 bool controlCalefactorActivo = false;  // ¿Está el control automático activado?
 
