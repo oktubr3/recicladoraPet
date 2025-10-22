@@ -29,15 +29,15 @@ const float BETA = 3950.0;       // Coeficiente Beta del termistor (típico: 395
 
 // --- El calefactor con MOSFET 🔥 ---
 const int mosfetPin = 11;        // Pin del MOSFET para el calefactor (PWM - usa Timer2, no interfiere con motor)
-float tempObjetivo = 150.0;      // Temperatura objetivo en °C (150 por defecto para PET)
+float tempObjetivo = 240.0;      // Temperatura objetivo en °C (240 para PET)
 bool controlCalefactorActivo = false;  // ¿Está el control automático activado?
 
 // --- Control PID (como las Prusa) 🎯 ---
 // El PID ajusta la potencia del calefactor de forma inteligente
-// para llegar al objetivo sin pasarse
-float Kp = 10.0;    // Proporcional: qué tan fuerte reacciona al error
-float Ki = 0.1;     // Integral: corrige errores acumulados
-float Kd = 50.0;    // Derivativo: anticipa cambios
+// Ajustado para frenar MUCHO antes y evitar sobrepaso
+float Kp = 8.0;     // Proporcional: reducido para reacción más suave
+float Ki = 0.05;    // Integral: reducido para menos acumulación en subida
+float Kd = 120.0;   // Derivativo: AUMENTADO para frenar mucho antes
 float errorAnterior = 0.0;
 float errorAcumulado = 0.0;
 
