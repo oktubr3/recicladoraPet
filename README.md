@@ -107,13 +107,12 @@ Este control garantiza:
 - [x] 3 Pulsadores para control de temperatura (ON/OFF, +, -)
 - [x] Termistor NTC 100K
 - [x] Resistencia 4.7kΩ (divisor de tensión del termistor)
-- [x] Fuente de alimentación 12V
+- [x] Fuente de alimentación 24V
+- [x] Módulo Step-down LM2596 (24V → 12V para Arduino y motor)
 
 ### Hardware Pendiente:
-- [ ] Fuente Step-down LM2596 (opcional para optimización)
 - [ ] Pulsador de emergencia
 - [ ] Hotend V6 (actualmente en pruebas con calefactor genérico)
-- [ ] Fuente de alimentación 24V (opcional, 12V funcional)
 
 ## 💻 Software
 
