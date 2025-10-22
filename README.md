@@ -148,12 +148,6 @@ El sistema completo incluye:
 - ✅ Separación de timers para evitar conflictos
 - ✅ Comunicación I2C para display (pines A4/A5)
 
-### Próximas Implementaciones
-- [ ] Sistema de parada de emergencia con botón dedicado
-- [ ] Perfiles de temperatura para diferentes tipos de plástico
-- [ ] Monitoreo de seguridad con alarmas automáticas
-- [ ] Auto-tuning de parámetros PID
-
 ## 🚀 Instalación y Uso
 
 ### Requisitos Previos
