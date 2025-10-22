@@ -220,7 +220,6 @@ git clone https://github.com/oktubr3/recicladoraPet.git
 - **Botón de parada de emergencia**: Corte inmediato de energía
 - **Protección térmica**: Límites de temperatura en software
 - **Aislamiento eléctrico**: Separación de circuitos de potencia y control
-- **Indicadores visuales**: LED de estado y alarmas en display
 
 ## 📚 Recursos Adicionales
 
