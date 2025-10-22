@@ -109,10 +109,8 @@ Este control garantiza:
 - [x] Resistencia 4.7kΩ (divisor de tensión del termistor)
 - [x] Fuente de alimentación 24V
 - [x] Módulo Step-down LM2596 (24V → 12V para Arduino y motor)
-
-### Hardware Pendiente:
-- [ ] Pulsador de emergencia
-- [ ] Hotend V6 (actualmente en pruebas con calefactor genérico)
+- [x] Pulsador de emergencia
+- [x] Hotend V6
 
 ## 💻 Software
 
