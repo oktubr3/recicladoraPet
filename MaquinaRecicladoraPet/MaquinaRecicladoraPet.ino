@@ -51,6 +51,20 @@ const int stepPin = 3;   // Pin número 3: controla los PASOS del motor
                          // Cada vez que este pin cambia, el motor da "un pasito"
                          // Es como cuando caminas: cada paso te mueve un poquito
 
+// --- PINES DE MICROSTEPPING (¡NUEVO! Para eliminar vibración) ---
+// Estos 3 pines controlan cuán "suave" se mueve el motor.
+// MS1, MS2, MS3 = MicroStep 1, 2, 3
+// Los ponemos en HIGH para activar modo 1/16 (súper suave)
+
+const int ms1Pin = 8;    // Pin 8: conectado a MS1 del A4988
+const int ms2Pin = 12;   // Pin 12: conectado a MS2 del A4988
+const int ms3Pin = 13;   // Pin 13: conectado a MS3 del A4988
+
+// Tabla de microstepping del A4988:
+// MS1  MS2  MS3  →  Modo
+// LOW  LOW  LOW  →  Full step (1/1)   ← modo viejo (mucha vibración)
+// HIGH HIGH HIGH →  1/16 step          ← modo nuevo (súper suave)
+
 
 // ============================================
 // PASO 4: DEFINIR EL PIN DEL POTENCIÓMETRO
@@ -75,6 +89,16 @@ volatile unsigned int motorDelayMicros = 5000;  // Tiempo entre cada paso del mo
 
 volatile bool motorHabilitado = true;   // "bool" = variable que solo puede ser true (verdadero) o false (falso)
                                         // true = motor ENCENDIDO, false = motor APAGADO
+
+// --- VARIABLES PARA ACELERACIÓN SUAVE (¡NUEVO! Para evitar sacudidas) ---
+// En vez de cambiar la velocidad instantáneamente, la cambiamos gradualmente.
+// Es como acelerar un auto suavemente en vez de pisar a fondo de golpe.
+
+volatile unsigned int motorDelayObjetivo = 5000;  // Velocidad a la que QUEREMOS llegar
+volatile unsigned int motorDelayActual = 5000;    // Velocidad ACTUAL del motor
+const unsigned int pasoAceleracion = 50;          // Qué tan rápido acelera (50 = suave)
+                                                  // Valor más chico = aceleración más suave
+                                                  // Valor más grande = aceleración más brusca
 
 
 // ============================================
@@ -147,8 +171,8 @@ const int botonSubir = 7;   // Pin 7: botón para SUBIR la temperatura objetivo 
 const int botonInversion = 4;   // Pin 4: botón para cambiar la DIRECCIÓN del motor
                                 // Hace que el motor gire al revés
 
-bool direccionActual = HIGH;    // Guardamos en qué dirección va el motor
-                                // HIGH = adelante, LOW = atrás
+bool direccionActual = LOW;     // Guardamos en qué dirección va el motor por defecto
+                                // LOW = dirección por defecto, HIGH = invertida
 
 
 // ============================================
@@ -176,6 +200,29 @@ ISR(TIMER1_COMPA_vect) {
 
   if (motorHabilitado) {  // Solo si el motor está habilitado...
 
+    // --- ACELERACIÓN SUAVE (¡NUEVO!) ---
+    // Cada vez que se ejecuta la ISR, acercamos la velocidad actual a la velocidad objetivo.
+    // Es como acelerar gradualmente un auto en vez de pisar a fondo de golpe.
+
+    if (motorDelayActual > motorDelayObjetivo) {
+      // Si vamos más LENTO de lo que queremos → ACELERAR
+      // (delay más grande = velocidad más lenta)
+      motorDelayActual -= pasoAceleracion;  // Reducir el delay = ir más rápido
+      if (motorDelayActual < motorDelayObjetivo) {
+        motorDelayActual = motorDelayObjetivo;  // No pasarse del objetivo
+      }
+      OCR1A = motorDelayActual * 2;  // Actualizar la velocidad del timer
+
+    } else if (motorDelayActual < motorDelayObjetivo) {
+      // Si vamos más RÁPIDO de lo que queremos → DESACELERAR
+      motorDelayActual += pasoAceleracion;  // Aumentar el delay = ir más lento
+      if (motorDelayActual > motorDelayObjetivo) {
+        motorDelayActual = motorDelayObjetivo;  // No pasarse del objetivo
+      }
+      OCR1A = motorDelayActual * 2;  // Actualizar la velocidad del timer
+    }
+
+    // --- GENERAR PULSO PARA EL MOTOR ---
     // Alternamos el pin del motor entre HIGH y LOW
     // Es como prender y apagar una luz super rápido: PRENDIDO-APAGADO-PRENDIDO-APAGADO
     // Cada vez que cambia, el motor da "un pasito"
@@ -223,6 +270,19 @@ void setup() {
 
   pinMode(dirPin, OUTPUT);    // Pin 2 es SALIDA (nosotros mandamos señales)
   pinMode(stepPin, OUTPUT);   // Pin 3 es SALIDA (nosotros mandamos señales)
+
+  // ¡NUEVO! Configurar pines de microstepping
+  pinMode(ms1Pin, OUTPUT);    // Pin 8 es SALIDA
+  pinMode(ms2Pin, OUTPUT);    // Pin 12 es SALIDA
+  pinMode(ms3Pin, OUTPUT);    // Pin 13 es SALIDA
+
+  // Activar modo 1/16 microstepping (todos en HIGH)
+  // Esto hace que el motor se mueva 16 veces más suave
+  digitalWrite(ms1Pin, HIGH);   // MS1 = HIGH
+  digitalWrite(ms2Pin, HIGH);   // MS2 = HIGH
+  digitalWrite(ms3Pin, HIGH);   // MS3 = HIGH
+  // ¡Ahora el motor dará 3200 pasos por vuelta en vez de 200!
+  // Cada paso es 16 veces más pequeño = movimiento SÚPER suave
 
 
   // --- PASO 12.3: CONFIGURAR EL PIN DEL CALEFACTOR ---
@@ -462,6 +522,8 @@ void loop() {
 
 
     // Ahora convertimos el valor del potenciómetro en velocidad del motor
+    // NOTA: Los rangos están ajustados para microstepping 1/16
+    // Con 1/16, el motor necesita dar 16 veces más pasos para la misma velocidad física
 
     if (valorPot < 20) {
       // Si el potenciómetro está casi en cero (menos de 2%)...
@@ -476,35 +538,31 @@ void loop() {
       motorHabilitado = true;  // Activar el motor
 
       // Calcular el delay (tiempo entre pasos) según el valor del potenciómetro
-      // Usamos diferentes rangos para tener mejor control:
+      // Los valores están AJUSTADOS para microstepping 1/16
+      // Ahora los delays son más cortos porque necesitamos más pasos
 
       if (valorPot < 400) {
         // Rango bajo (20 a 400): velocidades lentas
-        delayMotor = map(valorPot, 20, 400, 10000, 6500);
-        // map() "mapea" un valor de un rango a otro rango
-        // Si valorPot es 20 → delayMotor será 10000 (MUY LENTO)
-        // Si valorPot es 400 → delayMotor será 6500 (un poco más rápido)
+        delayMotor = map(valorPot, 20, 400, 3000, 1500);
+        // AJUSTADO: valores más bajos que antes para compensar microstepping
+        // Si valorPot es 20 → delayMotor será 3000 (lento pero suave)
+        // Si valorPot es 400 → delayMotor será 1500
 
       } else if (valorPot > 600) {
         // Rango alto (600 a 1023): velocidades rápidas
-        delayMotor = map(valorPot, 600, 1023, 4000, 500);
-        // Si valorPot es 600 → delayMotor será 4000
-        // Si valorPot es 1023 → delayMotor será 500 (MUY RÁPIDO)
+        delayMotor = map(valorPot, 600, 1023, 1000, 200);
+        // AJUSTADO: valores más bajos para velocidades más altas
+        // Si valorPot es 600 → delayMotor será 1000
+        // Si valorPot es 1023 → delayMotor será 200 (rápido y suave)
 
       } else {
         // Rango medio (400 a 600): velocidad media fija
-        delayMotor = 5000;  // Velocidad media constante
+        delayMotor = 1200;  // AJUSTADO: velocidad media para 1/16
       }
 
-      // Actualizar la velocidad del Timer1
-      // Recordá: el Timer1 es el que mueve el motor automáticamente
-      noInterrupts();  // Apagar interrupciones un momentito
-
-      OCR1A = delayMotor * 2;  // Ajustar el valor del timer
-                               // Multiplicamos por 2 porque el prescaler es 8
-                               // y cada "tick" del timer dura 0.5 microsegundos
-
-      interrupts();  // Volver a encender las interrupciones
+      // Actualizar la velocidad OBJETIVO (no la actual)
+      // La ISR se encargará de acelerar/desacelerar gradualmente
+      motorDelayObjetivo = delayMotor;  // ¡CAMBIO IMPORTANTE! Ahora usamos aceleración suave
     }
   }
 
@@ -713,9 +771,13 @@ void loop() {
         velocidadPercent = 0;  // Si el motor está apagado, mostrar 0%
       } else {
         // Convertir el delay del motor en porcentaje
-        // delay grande (10000) = velocidad baja (0%)
-        // delay pequeño (500) = velocidad alta (100%)
-        velocidadPercent = map(delayMotor, 10000, 500, 0, 100);
+        // AJUSTADO para microstepping 1/16:
+        // delay grande (3000) = velocidad baja (0%)
+        // delay pequeño (200) = velocidad alta (100%)
+        velocidadPercent = map(delayMotor, 3000, 200, 0, 100);
+        // Limitar entre 0 y 100 por seguridad
+        if (velocidadPercent < 0) velocidadPercent = 0;
+        if (velocidadPercent > 100) velocidadPercent = 100;
       }
 
       // Alinear los números (agregar espacios para que quede bonito)
