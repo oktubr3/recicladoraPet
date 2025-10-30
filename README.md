@@ -107,10 +107,12 @@ Este control garantiza:
 - [x] 3 Pulsadores para control de temperatura (ON/OFF, +, -)
 - [x] Termistor NTC 100K
 - [x] Resistencia 4.7kΩ (divisor de tensión del termistor)
+- [x] Resistencia 2.2kΩ (pull-down para pin STEP del A4988) ⭐ CRÍTICA
 - [x] Fuente de alimentación 24V
 - [x] Módulo Step-down LM2596 (24V → 12V para Arduino y motor)
 - [x] Pulsador de emergencia
 - [x] Hotend V6
+- [x] Jumper/Cable: RST y SLP del A4988 conectados juntos
 
 ## 💻 Software
 
@@ -118,7 +120,9 @@ Este control garantiza:
 El sistema completo incluye:
 
 #### Control de Motor:
+- ✅ Microstepping 1/16 (MS1/MS2/MS3 en pines D8/D12/D13)
 - ✅ Control mediante interrupciones por hardware (Timer1)
+- ✅ Aceleración/desaceleración suave (rampa de 50us)
 - ✅ Generación de pulsos automática en ISR (Interrupt Service Routine)
 - ✅ Control de velocidad variable mediante potenciómetro
 - ✅ Lectura y filtrado de señal analógica (promedio de 5 muestras)
@@ -173,12 +177,31 @@ git clone https://github.com/oktubr3/recicladoraPet.git
 
 5. Cargar el código al Arduino
 
+### Configuración de Hardware CRÍTICA ⚠️
+
+**IMPORTANTE - Prevención de vibración al arranque:**
+
+El driver A4988 tiene un problema conocido: durante el bootloader del Arduino (~3 segundos), los pines flotan y pueden causar que el motor vibre o gire aleatoriamente. Para solucionarlo:
+
+1. **Conectar pines RST y SLP del A4988**: Usar un jumper o cable para conectar los pines RESET y SLEEP juntos. Esto mantiene el driver estable durante el arranque.
+
+2. **Resistencia pull-down en pin STEP** ⭐ **CRÍTICA**:
+   ```
+   Pin STEP del A4988 ----[Resistencia 2.2kΩ]---- GND
+   ```
+   - Esta resistencia va EN PARALELO con la conexión del Arduino
+   - NO desconectar el cable Arduino D3 → STEP
+   - Agregar la resistencia entre el pin STEP del A4988 y GND
+   - Valores aceptables: 2.2kΩ, 4.7kΩ, o 10kΩ
+   - **Esta resistencia es OBLIGATORIA para evitar movimiento al arranque**
+
 ### Calibración Inicial
-1. **Ajuste de VREF del A4988**: Configurar a 0.8V para corriente óptima del motor
+1. **Ajuste de VREF del A4988**: Configurar a 0.8V para corriente óptima del motor (1.0A por bobina)
 2. **Verificación de display LCD**: Si no muestra nada, ajustar el potenciómetro en la parte trasera del módulo I2C
-3. **Dirección I2C**: Si el display no funciona con 0x27, cambiar a 0x3F en el código (línea 11)
+3. **Dirección I2C**: Si el display no funciona con 0x27, cambiar a 0x3F en el código (línea 34)
 4. **Calibración del termistor**: Verificar que la temperatura ambiente sea coherente (18-25°C)
-5. **Test de motor**: Verificar rango completo de velocidades y dirección
+5. **Microstepping**: Verificar que MS1, MS2, MS3 estén conectados a D8, D12, D13
+6. **Test de motor**: Verificar rango completo de velocidades y dirección
 
 ### Operación
 1. **Control de velocidad**: Girar potenciómetro (apagado automático < 2%)
@@ -192,8 +215,11 @@ git clone https://github.com/oktubr3/recicladoraPet.git
 ## 🎯 Características Técnicas
 
 ### Sistema de Tracción
+- **Microstepping**: 1/16 (3200 pasos/revolución vs 200 en full-step)
+- **Suavidad**: Movimiento ultra suave, sin vibración
+- **Aceleración**: Rampa suave de 50us para evitar sacudidas
 - **Rango de velocidad**: 100-2000 RPM (ajustable mediante potenciómetro)
-- **Resolución de control**: 200 pasos/revolución (NEMA 17)
+- **Resolución de control**: 3200 pasos/revolución (NEMA 17 con 1/16 microstepping)
 - **Zona muerta**: Apagado automático bajo 2% de velocidad
 - **Control**: Lazo abierto con interrupciones por hardware (Timer1)
 - **Tiempo de respuesta**: <1ms (control por ISR)
@@ -218,8 +244,45 @@ git clone https://github.com/oktubr3/recicladoraPet.git
 ## 🛡️ Seguridad
 
 - **Botón de parada de emergencia**: Corte inmediato de energía
-- **Protección térmica**: Límites de temperatura en software
+- **Protección térmica**: Límites de temperatura en software (0-270°C)
 - **Aislamiento eléctrico**: Separación de circuitos de potencia y control
+- **Protección contra vibración de arranque**: Resistencia pull-down en STEP
+
+## ⚡ Solución de Problemas
+
+### Motor vibra o gira al encender el Arduino
+
+**Causa**: Durante el bootloader del Arduino (~3 segundos), los pines flotan y el A4988 interpreta señales aleatorias.
+
+**Solución OBLIGATORIA**:
+1. Conectar pines **RST y SLP** del A4988 juntos con un jumper
+2. Agregar resistencia pull-down (2.2kΩ - 10kΩ) entre pin **STEP del A4988 y GND**
+   - La resistencia va en paralelo, NO interrumpe el cable del Arduino
+   - Esta es la solución profesional usada en todas las placas RAMPS/SKR
+
+**Diagrama de conexión**:
+```
+Arduino D3 ────────────┐
+                       │
+                       ├──── Pin STEP del A4988
+                       │
+                  [2.2kΩ]
+                       │
+                      GND
+```
+
+### Motor vibra durante operación normal
+
+1. Verificar que MS1, MS2, MS3 estén en HIGH (microstepping 1/16)
+2. Verificar VREF del A4988 (debe estar en ~0.8V)
+3. Verificar que RST y SLP estén conectados
+4. Revisar conexiones del motor (cables bien conectados)
+
+### Display LCD no muestra nada
+
+1. Ajustar potenciómetro en la parte trasera del módulo I2C
+2. Verificar dirección I2C (0x27 o 0x3F)
+3. Verificar conexiones A4 (SDA) y A5 (SCL)
 
 ## 📚 Recursos Adicionales
 
