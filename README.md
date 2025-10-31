@@ -1,301 +1,328 @@
 # 🔄 Máquina Recicladora de PET ♻️➡️✨
 
-## 📖 Descripción del Proyecto
+## 📖 ¿Qué es este proyecto?
 
-Este proyecto consiste en una máquina innovadora que transforma botellas de plástico PET en filamento utilizable para impresoras 3D. Es como una fábrica de espaguetis, pero en vez de masa, usa tiras de botellas de plástico. La máquina derrite el plástico y lo estira para crear un rollo de "hilo" perfecto para usar en la impresora 3D.
+Esta máquina transforma botellas de plástico PET (las de gaseosa) en "hilo" para impresoras 3D.
 
-La máquina combina:
-- **Control de temperatura PID profesional** (como impresoras 3D Prusa)
-- **Motor paso a paso con interrupciones** para precisión absoluta
-- **Interfaz intuitiva** con display LCD y botones de control
+**¿Cómo funciona?** Es como una máquina de hacer fideos, pero con plástico:
+1. Cortás tiras de botellas de plástico
+2. La máquina las derrite a 240°C (muy caliente!)
+3. Un motor va tirando del plástico derretido
+4. Sale un "hilo" perfecto para usar en impresoras 3D
 
-¡Así convertimos una botella que iba a la basura en algo nuevo y genial!
-
-## 🎯 Nuestra Misión
-
-Crear una solución accesible y eficiente para el reciclaje de plástico PET, permitiendo convertir residuos plásticos en material útil para manufactura aditiva, con control de calidad profesional y operación confiable.
-
-## 🏗️ Arquitectura del Sistema
-
-El proyecto tiene dos partes principales que trabajan en conjunto:
-
-### Parte 1: Sistema de Tracción (✅ COMPLETADO)
-**"El Tractorcito Inteligente"**
-
-Esta sección controla la velocidad de extracción del filamento con precisión absoluta mediante interrupciones por hardware.
-
-#### Componentes:
-- **Motor NEMA 17 (17HS2408)** - "El Músculo" 💪
-  - Precisión: 1.8° por paso (200 pasos/revolución)
-  - Torque: 1.6 kg-cm
-  - Proporciona la fuerza necesaria para extraer el plástico derretido
-  - Control por Timer1 con interrupciones (cero interferencia del display)
-
-- **Driver A4988** - "El Intérprete" 🗣️
-  - Conectado a pines D2 (DIR) y D3 (STEP)
-  - Traduce las señales del Arduino (5V) a comandos de potencia para el motor
-  - Ajuste de corriente mediante VREF para optimización del rendimiento
-  - Control de microstepping para mayor suavidad
-
-- **Arduino Uno** - "El Cerebro" 🧠
-  - Controla la velocidad y dirección del motor mediante Timer1
-  - Lee entrada del potenciómetro y botones cada 50ms
-  - Ejecuta el algoritmo de control PID para temperatura
-  - Maneja display LCD sin afectar el motor
-
-- **Controles de Usuario** 🕹️
-  - **Potenciómetro (A0)**: Control de velocidad variable (0-100%)
-  - **Botón inversión (D4)**: Cambio de dirección del motor
-  - Motor se apaga automáticamente por debajo del 2% de velocidad
-
-### Parte 2: Sistema de Calentamiento (✅ COMPLETADO)
-**"La Cocina de Plástico"**
-
-Esta sección se encarga de derretir el PET a la temperatura óptima (240°C) con control PID profesional.
-
-#### Componentes:
-- **Hotend/Calefactor** - "El Horno" 🔥
-  - Temperatura objetivo: 240°C (ajustable 0-270°C)
-  - Control PWM con precisión de ±2-3°C en estado estable
-  - Calentamiento inteligente que frena antes para evitar sobrepaso
-
-- **Termistor NTC 100k** - "El Termómetro" 🌡️
-  - Conectado a A1 con divisor de tensión (R fija: 4.7kΩ)
-  - Monitoreo constante con ecuación Steinhart-Hart
-  - Doble filtrado (promedio de 10 lecturas + filtro exponencial)
-  - Lectura estable sin ruido
-
-- **Módulo MOSFET** - "El Interruptor Mágico" 🔌
-  - Conectado a pin D11 (PWM con Timer2)
-  - Control PWM del calentador (0-255 niveles de potencia)
-  - Separado del Timer1 del motor para evitar interferencias
-
-- **Display LCD 16x2 con I2C** 📺
-  - Dirección I2C: 0x27 (o 0x3F)
-  - Conectado a pines A4 (SDA) y A5 (SCL)
-  - Muestra temperatura actual y objetivo
-  - Indica estado: [ON], [OFF], o [--] (en espera)
-  - Muestra velocidad/dirección temporalmente (3 segundos) al ajustar
-
-- **Panel de Control** 🎮
-  - **D5**: ON/OFF del control de temperatura
-  - **D6**: Bajar temperatura (-5°C por pulsación)
-  - **D7**: Subir temperatura (+5°C por pulsación)
-
-#### Control PID (Como Prusa i3):
-El sistema implementa control PID profesional con parámetros optimizados:
-- **Kp = 8.0**: Respuesta proporcional al error
-- **Ki = 0.05**: Corrección de error acumulado
-- **Kd = 120.0**: Anticipación y frenado (evita sobrepaso)
-
-Este control garantiza:
-- ✅ Llegada suave a temperatura objetivo sin sobrepaso significativo
-- ✅ Estabilidad excelente en estado estable (±2°C)
-- ✅ Respuesta rápida a cambios de temperatura
-- ✅ Eficiencia energética (potencia variable, no ON/OFF)
-
-## 📋 Lista de Materiales (BOM)
-
-### Hardware Implementado:
-- [x] Arduino Uno
-- [x] Motor NEMA 17 (17HS2408)
-- [x] Driver A4988
-- [x] Potenciómetro 10K (control de velocidad)
-- [x] Pulsador para inversión de dirección
-- [x] Display LCD 16x2 con I2C (dirección 0x27)
-- [x] Módulo MOSFET para calefactor
-- [x] 3 Pulsadores para control de temperatura (ON/OFF, +, -)
-- [x] Termistor NTC 100K
-- [x] Resistencia 4.7kΩ (divisor de tensión del termistor)
-- [x] Resistencia 2.2kΩ (pull-down para pin STEP del A4988) ⭐ CRÍTICA
-- [x] Fuente de alimentación 24V
-- [x] Módulo Step-down LM2596 (24V → 12V para Arduino y motor)
-- [x] Pulsador de emergencia
-- [x] Hotend V6
-- [x] Jumper/Cable: RST y SLP del A4988 conectados juntos
-
-## 💻 Software
-
-### Código Implementado (MaquinaRecicladoraPet.ino)
-El sistema completo incluye:
-
-#### Control de Motor:
-- ✅ Microstepping 1/16 (MS1/MS2/MS3 en pines D8/D12/D13)
-- ✅ Control mediante interrupciones por hardware (Timer1)
-- ✅ Aceleración/desaceleración suave (rampa de 50us)
-- ✅ Generación de pulsos automática en ISR (Interrupt Service Routine)
-- ✅ Control de velocidad variable mediante potenciómetro
-- ✅ Lectura y filtrado de señal analógica (promedio de 5 muestras)
-- ✅ Gestión de zona muerta (apagado automático < 2%)
-- ✅ Inversión de dirección con anti-rebote
-- ✅ Arquitectura no bloqueante (cero interferencia con display/sensores)
-
-#### Control de Temperatura:
-- ✅ Algoritmo PID profesional (Kp=8.0, Ki=0.05, Kd=120.0)
-- ✅ Lectura de termistor NTC 100k con ecuación Steinhart-Hart
-- ✅ Doble filtrado: promedio de 10 lecturas + suavizado exponencial
-- ✅ Control PWM del calefactor (0-255 niveles de potencia)
-- ✅ Ajuste de temperatura objetivo mediante botones (±5°C)
-- ✅ Activación/desactivación por botón
-- ✅ Límites de seguridad por software (0-270°C)
-
-#### Interfaz de Usuario:
-- ✅ Display LCD I2C 16x2 (actualización cada 200ms)
-- ✅ Vista principal: temperatura actual/objetivo y estado del calefactor
-- ✅ Vista temporal (3s): velocidad y dirección al ajustar controles
-- ✅ Panel de 4 botones (inversión + control de temperatura)
-- ✅ Lectura no bloqueante de entradas cada 50ms
-
-#### Arquitectura:
-- ✅ Timer1 dedicado al motor (no bloqueante)
-- ✅ Timer2 para PWM del calefactor (pin D11)
-- ✅ Separación de timers para evitar conflictos
-- ✅ Comunicación I2C para display (pines A4/A5)
-
-## 🚀 Instalación y Uso
-
-### Requisitos Previos
-- Arduino IDE 1.8.x o superior
-- Bibliotecas requeridas:
-  - Wire.h (incluida en Arduino IDE)
-  - LiquidCrystal_I2C (instalar desde Administrador de Bibliotecas)
-
-### Pasos de Instalación
-1. Clonar este repositorio:
-```bash
-git clone https://github.com/oktubr3/recicladoraPet.git
-```
-
-2. Instalar la biblioteca LiquidCrystal_I2C:
-   - En Arduino IDE: Herramientas → Administrar Bibliotecas
-   - Buscar "LiquidCrystal I2C"
-   - Instalar la versión de Frank de Brabander
-
-3. Abrir el archivo `MaquinaRecicladoraPet/MaquinaRecicladoraPet.ino` en Arduino IDE
-
-4. Seleccionar la placa "Arduino Uno" y el puerto COM correcto
-
-5. Cargar el código al Arduino
-
-### Configuración de Hardware CRÍTICA ⚠️
-
-**IMPORTANTE - Prevención de vibración al arranque:**
-
-El driver A4988 tiene un problema conocido: durante el bootloader del Arduino (~3 segundos), los pines flotan y pueden causar que el motor vibre o gire aleatoriamente. Para solucionarlo:
-
-1. **Conectar pines RST y SLP del A4988**: Usar un jumper o cable para conectar los pines RESET y SLEEP juntos. Esto mantiene el driver estable durante el arranque.
-
-2. **Resistencia pull-down en pin STEP** ⭐ **CRÍTICA**:
-   ```
-   Pin STEP del A4988 ----[Resistencia 2.2kΩ]---- GND
-   ```
-   - Esta resistencia va EN PARALELO con la conexión del Arduino
-   - NO desconectar el cable Arduino D3 → STEP
-   - Agregar la resistencia entre el pin STEP del A4988 y GND
-   - Valores aceptables: 2.2kΩ, 4.7kΩ, o 10kΩ
-   - **Esta resistencia es OBLIGATORIA para evitar movimiento al arranque**
-
-### Calibración Inicial
-1. **Ajuste de VREF del A4988**: Configurar a 0.8V para corriente óptima del motor (1.0A por bobina)
-2. **Verificación de display LCD**: Si no muestra nada, ajustar el potenciómetro en la parte trasera del módulo I2C
-3. **Dirección I2C**: Si el display no funciona con 0x27, cambiar a 0x3F en el código (línea 34)
-4. **Calibración del termistor**: Verificar que la temperatura ambiente sea coherente (18-25°C)
-5. **Microstepping**: Verificar que MS1, MS2, MS3 estén conectados a D8, D12, D13
-6. **Test de motor**: Verificar rango completo de velocidades y dirección
-
-### Operación
-1. **Control de velocidad**: Girar potenciómetro (apagado automático < 2%)
-2. **Cambio de dirección**: Presionar botón D4
-3. **Control de temperatura**:
-   - D5: Activar/desactivar calefactor
-   - D6: Bajar temperatura objetivo (-5°C)
-   - D7: Subir temperatura objetivo (+5°C)
-4. **Temperatura por defecto**: 240°C (óptimo para PET)
-
-## 🎯 Características Técnicas
-
-### Sistema de Tracción
-- **Microstepping**: 1/16 (3200 pasos/revolución vs 200 en full-step)
-- **Suavidad**: Movimiento ultra suave, sin vibración
-- **Aceleración**: Rampa suave de 50us para evitar sacudidas
-- **Rango de velocidad**: 100-2000 RPM (ajustable mediante potenciómetro)
-- **Resolución de control**: 3200 pasos/revolución (NEMA 17 con 1/16 microstepping)
-- **Zona muerta**: Apagado automático bajo 2% de velocidad
-- **Control**: Lazo abierto con interrupciones por hardware (Timer1)
-- **Tiempo de respuesta**: <1ms (control por ISR)
-- **Interferencia**: Cero (arquitectura no bloqueante)
-
-### Sistema de Calentamiento
-- **Rango de temperatura**: 0°C - 270°C (ajustable)
-- **Temperatura por defecto**: 240°C (óptimo para PET)
-- **Precisión**: ±2-3°C en estado estable
-- **Control**: PID profesional (Kp=8.0, Ki=0.05, Kd=120.0)
-- **Resolución PWM**: 256 niveles (0-255)
-- **Frecuencia de actualización**: 200ms (5 Hz)
-- **Sensor**: Termistor NTC 100k con ecuación Steinhart-Hart
-- **Filtrado**: Doble etapa (promedio + exponencial)
-
-### Interfaz de Usuario
-- **Display**: LCD 16x2 con backlight, protocolo I2C
-- **Actualización de pantalla**: 200ms (sin parpadeo)
-- **Lectura de botones**: 50ms con anti-rebote por software
-- **Vista temporal**: 3 segundos tras ajuste de velocidad/dirección
-
-## 🛡️ Seguridad
-
-- **Botón de parada de emergencia**: Corte inmediato de energía
-- **Protección térmica**: Límites de temperatura en software (0-270°C)
-- **Aislamiento eléctrico**: Separación de circuitos de potencia y control
-- **Protección contra vibración de arranque**: Resistencia pull-down en STEP
-
-## ⚡ Solución de Problemas
-
-### Motor vibra o gira al encender el Arduino
-
-**Causa**: Durante el bootloader del Arduino (~3 segundos), los pines flotan y el A4988 interpreta señales aleatorias.
-
-**Solución OBLIGATORIA**:
-1. Conectar pines **RST y SLP** del A4988 juntos con un jumper
-2. Agregar resistencia pull-down (2.2kΩ - 10kΩ) entre pin **STEP del A4988 y GND**
-   - La resistencia va en paralelo, NO interrumpe el cable del Arduino
-   - Esta es la solución profesional usada en todas las placas RAMPS/SKR
-
-**Diagrama de conexión**:
-```
-Arduino D3 ────────────┐
-                       │
-                       ├──── Pin STEP del A4988
-                       │
-                  [2.2kΩ]
-                       │
-                      GND
-```
-
-### Motor vibra durante operación normal
-
-1. Verificar que MS1, MS2, MS3 estén en HIGH (microstepping 1/16)
-2. Verificar VREF del A4988 (debe estar en ~0.8V)
-3. Verificar que RST y SLP estén conectados
-4. Revisar conexiones del motor (cables bien conectados)
-
-### Display LCD no muestra nada
-
-1. Ajustar potenciómetro en la parte trasera del módulo I2C
-2. Verificar dirección I2C (0x27 o 0x3F)
-3. Verificar conexiones A4 (SDA) y A5 (SCL)
-
-## 📚 Recursos Adicionales
-
-- [Documentación Arduino](https://www.arduino.cc/reference/en/)
-- [Guía de calibración A4988](https://www.pololu.com/product/1182)
-- [Propiedades térmicas del PET](https://en.wikipedia.org/wiki/Polyethylene_terephthalate)
-
-## 📄 Licencia
-
-Este proyecto está bajo Licencia MIT - ver el archivo LICENSE para más detalles.
+**¡Convertimos basura en algo útil!** 🌍💚
 
 ---
 
-**¡Juntos podemos convertir la basura en tesoros!** 🌍💚
+## 🏗️ ¿Cómo está hecha?
 
-*Proyecto en desarrollo activo - Última actualización: Octubre 2025*
+La máquina tiene **DOS partes principales**:
+
+### Parte 1: El Motor (Tira del plástico)
+**"El Tractorcito Inteligente" 🚜**
+
+Esta parte tira del plástico derretido, como cuando sacás masa de pizza estirada.
+
+**¿Qué usa?**
+- **Motor NEMA 17**: El "músculo" que tira 💪
+- **Driver A4988**: Convierte las señales del Arduino en potencia para el motor
+- **Arduino Uno**: El "cerebro" que controla todo 🧠
+- **Potenciómetro**: Una perilla para controlar la velocidad (como el volumen de la radio)
+- **Botón**: Para cambiar la dirección (adelante/atrás)
+
+**¿Qué hace especial?**
+- Se mueve SÚPER suave (microstepping 1/16 = pasos 16 veces más pequeños)
+- Acelera y frena de forma gradual (no se sacude)
+- Podés controlar la velocidad de 0% a 100%
+
+---
+
+### Parte 2: El Calentador (Derrite el plástico)
+**"La Cocina de Plástico" 🔥**
+
+Esta parte derrite el plástico PET a 240°C (la temperatura perfecta).
+
+**¿Qué usa?**
+- **Hotend V6**: El "horno" que calienta
+- **Termistor NTC 100k**: Un "termómetro electrónico" que mide la temperatura
+- **Módulo MOSFET**: Un interruptor electrónico que controla cuánta potencia darle al calentador
+- **Display LCD**: Una pantallita que muestra la temperatura 📺
+- **3 Botones**: Para prender/apagar y subir/bajar la temperatura
+
+**¿Qué hace especial?**
+- **Control PID profesional**: Como las impresoras 3D caras (Prusa)
+- Llega exactamente a la temperatura que querés (±2-3°C de precisión)
+- No se pasa ni se queda corta
+
+---
+
+## 📋 ¿Qué materiales necesito?
+
+### Electrónica:
+- [ ] Arduino Uno (el cerebro)
+- [ ] Motor NEMA 17 (modelo 17HS2408)
+- [ ] Driver A4988 (controla el motor)
+- [ ] Display LCD 16x2 con I2C (la pantallita)
+- [ ] Módulo MOSFET (para controlar el calentador)
+- [ ] Termistor NTC 100K (el termómetro)
+- [ ] Potenciómetro 10K (la perilla de velocidad)
+- [ ] 4 Botones pulsadores
+
+### Componentes importantes:
+- [ ] Hotend V6 (el calentador)
+- [ ] Fuente de alimentación 24V
+- [ ] Módulo Step-down LM2596 (convierte 24V a 12V)
+- [ ] Resistencia 4.7kΩ (para el termómetro)
+- [ ] **Resistencia 2.2kΩ** ⭐ **MUY IMPORTANTE** (evita que el motor vibre al encender)
+- [ ] Cable jumper (para conectar 2 pines del A4988)
+- [ ] Botón de emergencia (para cortar todo en caso de problema)
+
+---
+
+## 🚀 ¿Cómo lo instalo?
+
+### Paso 1: Instalar el programa Arduino IDE
+1. Descargá Arduino IDE desde [arduino.cc](https://www.arduino.cc)
+2. Instalalo en tu computadora
+
+### Paso 2: Descargar este proyecto
+1. Descargá este proyecto (botón verde "Code" → "Download ZIP")
+2. Descomprimí el archivo ZIP
+
+### Paso 3: Instalar la biblioteca del display
+1. Abrí Arduino IDE
+2. Andá a: **Herramientas** → **Administrar Bibliotecas**
+3. Buscá: **"LiquidCrystal I2C"**
+4. Instalá la versión de **Frank de Brabander**
+
+### Paso 4: Subir el código al Arduino
+1. Abrí el archivo: `MaquinaRecicladoraPet/MaquinaRecicladoraPet.ino`
+2. Conectá tu Arduino a la computadora con el cable USB
+3. Seleccioná: **Herramientas** → **Placa** → **Arduino Uno**
+4. Seleccioná: **Herramientas** → **Puerto** → (el puerto donde está tu Arduino)
+5. Hacé click en el botón **"➜"** (Subir) y esperá
+
+---
+
+## ⚠️ IMPORTANTE: Configuración de Hardware
+
+### Problema común: Motor vibra al encender
+
+Cuando encendés el Arduino, durante los primeros 3 segundos el motor puede vibrar o girar solo. Esto pasa porque los cables "flotan" (no tienen un valor definido) hasta que el programa arranca.
+
+**Solución (OBLIGATORIA):**
+
+#### 1. Conectar dos pines del A4988 juntos
+En el módulo A4988, buscá los pines **RST** y **SLP** (están uno al lado del otro). Conectalos con un cable o jumper.
+
+#### 2. Agregar una resistencia al pin STEP ⭐
+
+Esta es LA SOLUCIÓN más importante:
+
+```
+                    Cable del Arduino
+Arduino D3 ────────────────────┐
+                                │
+                                ├──── Pin STEP del A4988
+                                │
+                           [Resistencia
+                            2.2kΩ]
+                                │
+                               GND (tierra)
+```
+
+**¿Cómo se conecta?**
+- **NO desconectes** el cable que va del Arduino al A4988
+- **Agregá** una resistencia de 2.2kΩ entre el pin STEP del A4988 y GND
+- La resistencia va "en paralelo" (al costado), no corta el cable
+- Podés usar resistencias de: 2.2kΩ, 4.7kΩ o 10kΩ
+
+**¿Por qué funciona?**
+La resistencia "tira" el pin hacia GND (0 voltios) cuando el Arduino no está mandando señales. Así el motor no se mueve durante el arranque.
+
+---
+
+## 🎮 ¿Cómo se usa?
+
+### Controlar la velocidad del motor:
+- Girá el **potenciómetro** (la perilla)
+- Hacia la derecha = más rápido
+- Hacia la izquierda = más lento
+- Si lo ponés en 0%, el motor se apaga solo
+
+### Cambiar la dirección:
+- Presioná el **botón D4**
+- El motor cambia entre adelante y atrás
+
+### Controlar la temperatura:
+- **Botón D5**: Prender/Apagar el calentador
+- **Botón D6**: Bajar temperatura (de a 5°C)
+- **Botón D7**: Subir temperatura (de a 5°C)
+- Temperatura inicial: **240°C** (perfecta para PET)
+
+### Leer el display:
+**Pantalla normal** (muestra la temperatura):
+```
+T:240.0C  [ON]
+Obj:240C
+```
+- **T:** = Temperatura actual
+- **[ON]** = Está calentando
+- **[--]** = Está en la temperatura correcta (esperando)
+- **[OFF]** = Apagado
+- **Obj:** = Temperatura objetivo
+
+**Pantalla temporal** (cuando ajustás la velocidad):
+```
+Velocidad:  50%
+Dir: Adelante
+```
+Esta pantalla se muestra por 3 segundos cuando tocás el potenciómetro o el botón de dirección.
+
+---
+
+## 🔧 Solución de problemas
+
+### El motor vibra cuando enciendo el Arduino
+
+**Causa:** Los cables "flotan" durante los primeros 3 segundos del arranque.
+
+**Solución:**
+1. ¿Conectaste los pines **RST y SLP** del A4988?
+2. ¿Agregaste la **resistencia 2.2kΩ** entre STEP y GND?
+3. ¿La resistencia está en **paralelo** (no corta el cable del Arduino)?
+
+Si hiciste todo eso, el motor NO debería moverse al encender.
+
+---
+
+### El motor vibra TODO el tiempo
+
+**Posibles causas:**
+1. **Microstepping mal configurado:**
+   - Verificá que los pines D8, D12, D13 del Arduino estén conectados a MS1, MS2, MS3 del A4988
+
+2. **Poca corriente:**
+   - El potenciómetro del A4988 (VREF) debe estar en 0.8V
+   - Si no tenés multímetro, giralo POQUITO en sentido horario
+
+3. **RST y SLP no conectados:**
+   - Verificá que esos dos pines estén conectados con un jumper
+
+---
+
+### El display no muestra nada
+
+**Soluciones:**
+1. **Ajustar el contraste:** En la parte de atrás del display hay un potenciómetro chiquito. Giralo hasta que veas las letras.
+2. **Dirección I2C incorrecta:**
+   - Abrí el código en Arduino IDE
+   - Buscá la línea 34: `LiquidCrystal_I2C lcd(0x27, 16, 2);`
+   - Cambiá `0x27` por `0x3F`
+   - Volvé a subir el código
+
+---
+
+### La temperatura no es correcta
+
+1. **Verificá las conexiones del termistor** (el sensor de temperatura)
+2. **Verificá la resistencia de 4.7kΩ** (debe estar bien conectada)
+3. La temperatura ambiente debería mostrar entre 18°C y 25°C
+
+---
+
+## 📊 Datos técnicos (para los curiosos)
+
+### Motor:
+- **Pasos por vuelta:** 3200 (con microstepping 1/16)
+- **Velocidad:** Ajustable de 100 a 2000 RPM
+- **Suavidad:** Movimiento ultra suave, sin vibraciones
+- **Aceleración:** Gradual (no se sacude al arrancar/frenar)
+
+### Temperatura:
+- **Rango:** 0°C a 270°C
+- **Precisión:** ±2-3°C
+- **Control:** PID profesional (como impresoras 3D Prusa)
+- **Temperatura para PET:** 240°C
+
+### Display:
+- **Tamaño:** 16 caracteres × 2 líneas
+- **Actualización:** Cada 0.2 segundos (sin parpadeo)
+
+---
+
+## 🛡️ Seguridad
+
+**⚠️ IMPORTANTE - LEÉ ESTO:**
+
+1. **El calentador llega a 240°C** (¡puede quemarte!):
+   - NO lo toques cuando está encendido
+   - Esperá 10 minutos después de apagar para que se enfríe
+
+2. **Botón de emergencia**:
+   - Siempre tené el botón de emergencia conectado
+   - Si algo sale mal, presionalo y corta toda la energía
+
+3. **Supervisión de un adulto**:
+   - Este proyecto usa temperaturas altas y electricidad
+   - Pedile a un adulto que te supervise
+
+4. **Ventilación**:
+   - Usá la máquina en un lugar ventilado
+   - El plástico derretido puede tener olor
+
+---
+
+## 🎓 ¿Querés aprender más?
+
+### Sobre Arduino:
+- [Documentación oficial de Arduino](https://www.arduino.cc/reference/es/)
+- [Tutoriales en español](https://www.arduino.cc/en/Tutorial/HomePage)
+
+### Sobre el PET:
+- [¿Qué es el PET?](https://es.wikipedia.org/wiki/Tereftalato_de_polietileno)
+- El PET es el plástico de las botellas de gaseosa
+- Se derrite a 240-260°C
+
+### Sobre reciclaje:
+- [Precious Plastic](https://preciousplastic.com/) - Proyecto de reciclaje de plástico global
+- [Recyclebot](https://www.appropedia.org/Recyclebot) - Máquinas similares
+
+---
+
+## 💚 Misión del proyecto
+
+**Queremos ayudar al planeta** convirtiendo botellas de plástico (que iban a la basura) en material útil para crear cosas nuevas con impresoras 3D.
+
+Si cada persona recicla sus botellas, podemos:
+- Reducir la basura plástica
+- Crear material útil
+- Ahorrar dinero
+- Proteger el medio ambiente
+
+**¡Juntos podemos convertir la basura en tesoros!** 🌍♻️✨
+
+---
+
+## 📄 Licencia
+
+Este proyecto es **libre y gratuito** (Licencia MIT). Podés:
+- Usarlo para lo que quieras
+- Modificarlo
+- Compartirlo
+- Construir tu propia máquina
+
+---
+
+## 👥 Créditos
+
+Creado con ❤️ para ayudar al planeta y enseñar programación.
+
+Código comentado especialmente para que lo entiendan niños de 12 años.
+
+**Última actualización:** Octubre 2025
+
+---
+
+**¿Preguntas? ¿Problemas? ¿Mejoras?**
+Abrí un "Issue" en GitHub y te ayudamos! 🚀
