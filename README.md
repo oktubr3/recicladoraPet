@@ -334,8 +334,6 @@ Este proyecto es **libre y gratuito** (Licencia MIT). Podés:
 
 Creado con ❤️ para ayudar al planeta 🌍 y enseñar programación 💻.
 
-📝 Código comentado especialmente para que lo entiendan niños de 12 años.
-
 ---
 
 **❓ ¿Preguntas? 🐛 ¿Problemas? 💡 ¿Mejoras?**
